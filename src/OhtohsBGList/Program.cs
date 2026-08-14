@@ -1,5 +1,7 @@
 using Asp.Versioning;
+using Microsoft.EntityFrameworkCore;
 using OhtohsBGList;
+using OhtohsBGList.Data;
 using OhtohsBGList.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,7 +43,21 @@ builder.Services.AddApiVersioning(options =>
 builder.Services.AddResponseCaching();
 builder.Services.ConfigureOptions<SwaggerConfiguration>();
 
+builder.Services.AddApplicationServices(options =>
+{
+    options.SQLiteConnectionString = builder.Configuration.GetConnectionString("BgDbContext");
+});
+
 var app = builder.Build();
+
+// Check if the DB was migrated
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<BgDbContext>();
+    var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+    if (pendingMigrations.Any())
+        throw new Exception($"Database is not fully migrated for {nameof(BgDbContext)}.");
+}
 
 app.AddErrorEndpoint();
 
@@ -52,7 +68,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
 
 if (app.Configuration.GetValue<bool>("UseDeveloperExceptionPage"))
 {

@@ -1,3 +1,10 @@
 <Solution>
-  <Project Path="OhtohsBGList/OhtohsBGList.csproj" />
+  <Folder Name="/SolutionItems/">
+    <File Path=".editorconfig" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/OhtohsBGList/OhtohsBGList.csproj" />
+  </Folder>
+  <Folder Name="/test/" />
 </Solution>
