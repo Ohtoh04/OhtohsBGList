@@ -1,7 +1,13 @@
 using Asp.Versioning;
+using CsvHelper.Configuration;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using NeoSmart.Caching.Sqlite;
 using OhtohsBGList;
 using OhtohsBGList.Data;
+using OhtohsBGList.Data.Models;
 using OhtohsBGList.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +53,50 @@ builder.Services.AddApplicationServices(options =>
 {
     options.SQLiteConnectionString = builder.Configuration.GetConnectionString("BgDbContext");
 });
+builder.Services.AddApplicationOptions(builder.Configuration);
+
+builder.Services.AddIdentity<ApiUser, IdentityRole>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 12;
+}).AddEntityFrameworkStores<BgDbContext>()
+  .AddDefaultTokenProviders();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme =
+    options.DefaultChallengeScheme =
+    options.DefaultForbidScheme =
+    options.DefaultScheme =
+    options.DefaultSignInScheme =
+    options.DefaultSignOutScheme =
+        JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["JWT:Issuer"],
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["JWT:Audience"],
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            System.Text.Encoding.UTF8.GetBytes(builder.Configuration["JWT:SigningKey"]
+            ?? throw new Exception("Couldn't obtain signing key")))
+    };
+});
+
+builder.Services.AddSqliteCache(options =>
+{
+    var cacheDirectory = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "cache");
+    Directory.CreateDirectory(cacheDirectory);
+
+    options.CachePath = builder.Configuration["SqlCache:Path"]
+        ?? Path.Combine(cacheDirectory, "boardgames-cache.db");
+});
 
 var app = builder.Build();
 
@@ -60,6 +110,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.AddErrorEndpoint();
+app.MapGroup("/api/auth").MapIdentityApi<ApiUser>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -84,6 +135,7 @@ app.UseResponseCaching();
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

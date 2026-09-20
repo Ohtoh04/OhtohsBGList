@@ -1,9 +1,10 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using OhtohsBGList.Data.Models;
 
 namespace OhtohsBGList.Data;
 
-public class BgDbContext : DbContext
+public class BgDbContext : IdentityDbContext<ApiUser>
 {
     public DbSet<BoardGame> BoardGames => Set<BoardGame>();
     public DbSet<Publisher> Publishers => Set<Publisher>();

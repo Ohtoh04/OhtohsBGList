@@ -11,6 +11,7 @@ using OhtohsBGList.Data.Models;
 using System.Linq.Dynamic.Core;
 using OhtohsBGList.Contracts.BoardGames;
 using OhtohsBGList.Mappings;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace OhtohsBGList.Controllers;
 
@@ -19,11 +20,13 @@ namespace OhtohsBGList.Controllers;
 [Route("api/v{version:apiVersion}/board-games")]
 public class BoardGamesController(
     ILogger<BoardGamesController> logger,
-    BgDbContext dbContext)
+    BgDbContext dbContext,
+    IDistributedCache cache)
     : ControllerBase
 {
     private readonly ILogger<BoardGamesController> _logger = logger;
     private readonly BgDbContext _context = dbContext;
+    private readonly IDistributedCache _cache = cache;
 
     [HttpPost("bulk", Name = "UploadBoardGames")]
     public async Task<IActionResult> UploadBoardGames(IFormFile data, CancellationToken ct)
@@ -275,6 +278,14 @@ public class BoardGamesController(
         await _context.SaveChangesAsync(ct);
 
         return NoContent();
+    }
+
+    [HttpGet("test")]
+    public async Task<IActionResult> TestCache()
+    {
+        _cache.SetString("key1", "string1");
+
+        return Ok();
     }
 
     private static List<Link> GetBoardGameLinks(IUrlHelper url, int id)

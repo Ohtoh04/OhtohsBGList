@@ -1,7 +1,11 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OhtohsBGList.Constants;
 using OhtohsBGList.Data;
 using OhtohsBGList.Data.Interceptors;
+using OhtohsBGList.Data.Models;
 using OhtohsBGList.Options;
+using OhtohsBGList.Services;
 
 namespace OhtohsBGList;
 
@@ -24,6 +28,17 @@ public static class DependencyInjection
             options.UseSqlite(cfg.SQLiteConnectionString)
                 .AddInterceptors(new SetAuditInterceptor());
         });
+
+        serviceCollection.AddSingleton<IEmailSender<ApiUser>, SmtpEmailSender>();
+
+        return serviceCollection;
+    }
+
+    public static IServiceCollection AddApplicationOptions(
+        this IServiceCollection serviceCollection, IConfiguration configuration)
+    {
+        serviceCollection.Configure<SmtpOptions>(
+            configuration.GetSection(ConfigurationKeys.SmtpSection));
 
         return serviceCollection;
     }
