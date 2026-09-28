@@ -26,11 +26,11 @@ public class SwaggerConfiguration(IApiVersionDescriptionProvider provider)
             Scheme = "bearer"
         });
 
-        options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+        options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
         {
             {
-                new OpenApiSecuritySchemeReference("Bearer", null),
-                new List<string>()
+                new OpenApiSecuritySchemeReference(JwtBearerDefaults.AuthenticationScheme, doc),
+                []
             }
         });
 

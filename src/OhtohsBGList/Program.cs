@@ -1,12 +1,15 @@
+using System.Security.Claims;
 using Asp.Versioning;
 using CsvHelper.Configuration;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NeoSmart.Caching.Sqlite;
 using OhtohsBGList;
+using OhtohsBGList.Constants;
 using OhtohsBGList.Data;
 using OhtohsBGList.Data.Models;
 using OhtohsBGList.Endpoints;
+using OhtohsBGList.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +56,14 @@ builder.Services.AddApplicationServices(options =>
 });
 builder.Services.AddApplicationOptions(builder.Configuration);
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ModeratorWithMobilePhone", policy =>
+        policy
+            .RequireClaim(ClaimTypes.Role, RoleNames.Moderator)
+            .RequireClaim(ClaimTypes.MobilePhone));
+});
+
 builder.Services.AddIdentityApiEndpoints<ApiUser>(options =>
 {
     options.Password.RequireDigit = true;
@@ -62,7 +73,8 @@ builder.Services.AddIdentityApiEndpoints<ApiUser>(options =>
     options.Password.RequiredLength = 12;
 }).AddRoles<IdentityRole>()
   .AddEntityFrameworkStores<BgDbContext>()
-  .AddDefaultTokenProviders();
+  .AddDefaultTokenProviders()
+  .AddClaimsPrincipalFactory<ApiUserClaimsPrincipalFactory>();
 
 builder.Services.AddSqliteCache(options =>
 {
@@ -86,6 +98,7 @@ using (var scope = app.Services.CreateScope())
 
 app.AddErrorEndpoint();
 app.MapGroup("/api/auth").MapIdentityApi<ApiUser>();
+app.AddDebugEndpoints();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

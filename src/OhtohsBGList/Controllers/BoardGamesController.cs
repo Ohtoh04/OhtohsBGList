@@ -12,6 +12,7 @@ using System.Linq.Dynamic.Core;
 using OhtohsBGList.Contracts.BoardGames;
 using OhtohsBGList.Mappings;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.AspNetCore.Authorization;
 
 namespace OhtohsBGList.Controllers;
 
@@ -144,7 +145,7 @@ public class BoardGamesController(
         });
     }
 
-
+    [Authorize(Policy = "ModeratorWithMobilePhone")]
     [HttpGet(Name = "GetBoardGames")]
     public async Task<ActionResult<ApiResponse<PagedResponse<BoardGame>>>> GetBoardGames(
         [FromQuery] int pageNumber = 1,
