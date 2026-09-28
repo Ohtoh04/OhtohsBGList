@@ -29,7 +29,7 @@ public class SetAuditInterceptor : ISaveChangesInterceptor
 
         var utcNow = DateTime.UtcNow;
 
-        foreach (var entry in context.ChangeTracker.Entries<BoardGame>())
+        foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
             switch (entry.State)
             {
@@ -37,8 +37,7 @@ public class SetAuditInterceptor : ISaveChangesInterceptor
                     if (entry.Entity.CreatedDate == default)
                         entry.Entity.CreatedDate = utcNow;
 
-                    if (!(entry.Entity.LastModifiedDate != default))
-                        entry.Entity.LastModifiedDate = utcNow;
+                    entry.Entity.LastModifiedDate = utcNow;
                     break;
 
                 case EntityState.Modified:

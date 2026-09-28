@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace OhtohsBGList.Data.Models;
 
 [Table("Domains")]
-public class Domain
+public class Domain : IAuditable
 {
     [Key]
     [Required]

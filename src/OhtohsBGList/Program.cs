@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Asp.Versioning;
 using CsvHelper.Configuration;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NeoSmart.Caching.Sqlite;
 using OhtohsBGList;
@@ -15,13 +16,24 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.ModelBindingMessageProvider.SetValueIsInvalidAccessor(
+        x => $"The value '{x}' is invalid.");
+    options.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(
+        x => $"The field {x} must be a number.");
+    options.ModelBindingMessageProvider.SetAttemptedValueIsInvalidAccessor(
+        (x, y) => $"The value '{x}' is not valid for {y}.");
+    options.ModelBindingMessageProvider.SetMissingKeyOrValueAccessor(
+        () => "A value is required.");
+
+    options.CacheProfiles.Add("NoCache", new CacheProfile { NoStore = true });
+    options.CacheProfiles.Add("Any-60", new CacheProfile { Location = ResponseCacheLocation.Any, Duration = 60 });
+});
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-builder.Services.AddOpenApi();
 
 builder.Services.AddCors(options =>
 {
@@ -30,6 +42,12 @@ builder.Services.AddCors(options =>
         cfg.WithOrigins(builder.Configuration.GetValue<string[]>("AllowedHosts") ?? []);
         cfg.AllowAnyHeader();
         cfg.AllowAnyMethod();
+    });
+    options.AddPolicy("GetOnly", cfg =>
+    {
+        cfg.AllowAnyOrigin();
+        cfg.AllowAnyHeader();
+        cfg.WithMethods(HttpMethod.Get.Method);
     });
 });
 
@@ -103,7 +121,6 @@ app.AddDebugEndpoints();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
     app.UseSwagger();
     app.UseSwaggerUI();
 }

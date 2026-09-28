@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace OhtohsBGList.Data.Models;
 
 [Table("Publishers")]
-public class Publisher
+public class Publisher : IAuditable
 {
     [Key]
     [Required]

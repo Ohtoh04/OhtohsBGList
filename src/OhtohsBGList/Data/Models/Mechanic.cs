@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace OhtohsBGList.Data.Models;
 
 [Table("Mechanics")]
-public class Mechanic
+public class Mechanic : IAuditable
 {
     [Key]
     [Required]

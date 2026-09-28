@@ -4,12 +4,14 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OhtohsBGList.Constants;
 using OhtohsBGList.Contracts;
 using OhtohsBGList.Contracts.Csv;
 using OhtohsBGList.Data;
 using OhtohsBGList.Data.Models;
 using System.Linq.Dynamic.Core;
 using OhtohsBGList.Contracts.BoardGames;
+using OhtohsBGList.Extensions;
 using OhtohsBGList.Mappings;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +31,13 @@ public class BoardGamesController(
     private readonly BgDbContext _context = dbContext;
     private readonly IDistributedCache _cache = cache;
 
+    /// <summary>
+    /// Bulk-imports board games (plus their domains and mechanics) from a BGG-format CSV file.
+    /// </summary>
+    /// <param name="data">The CSV file to import.</param>
+    /// <param name="ct">A cancellation token.</param>
+    [Authorize(Roles = RoleNames.Administrator)]
+    [ResponseCache(CacheProfileName = "NoCache")]
     [HttpPost("bulk", Name = "UploadBoardGames")]
     public async Task<IActionResult> UploadBoardGames(IFormFile data, CancellationToken ct)
     {
@@ -145,35 +154,58 @@ public class BoardGamesController(
         });
     }
 
+    /// <summary>
+    /// Gets a paged, sorted and optionally filtered list of board games.
+    /// </summary>
+    /// <param name="request">Paging, sorting and filtering parameters.</param>
+    /// <param name="ct">A cancellation token.</param>
     [Authorize(Policy = "ModeratorWithMobilePhone")]
+    [ResponseCache(CacheProfileName = "Any-60")]
     [HttpGet(Name = "GetBoardGames")]
     public async Task<ActionResult<ApiResponse<PagedResponse<BoardGame>>>> GetBoardGames(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10,
-        [FromQuery] string sortColumn = "Name",
+        [FromQuery] PagedRequest<BoardGame> request,
         CancellationToken ct = default)
     {
-        pageNumber = Math.Max(pageNumber, 1);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        var cacheKey =
+            $"{nameof(GetBoardGames)}-{request.PageNumber}-{request.PageSize}-{request.SortColumn}-{request.SortOrder}-{request.FilterQuery}";
 
-        var totalCount = await _context.BoardGames.CountAsync(ct);
-        var result = await _context.BoardGames
-            .OrderBy(sortColumn)
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(ct);
+        if (!_cache.TryGetValue(cacheKey, out PagedResponse<BoardGame>? pagedResponse))
+        {
+            var query = _context.BoardGames.AsQueryable();
 
-        var pagedResponse = new PagedResponse<BoardGame>(
-            result,
+            if (!string.IsNullOrWhiteSpace(request.FilterQuery))
+                query = query.Where(bg => bg.Name.Contains(request.FilterQuery));
+
+            var totalCount = await query.CountAsync(ct);
+            var items = await query
+                .OrderBy($"{request.SortColumn} {request.SortOrder}")
+                .Skip((request.PageNumber - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .ToListAsync(ct);
+
+            pagedResponse = new PagedResponse<BoardGame>(
+                items,
+                request.PageNumber,
+                request.PageSize,
+                totalCount);
+
+            _cache.Set(cacheKey, pagedResponse, TimeSpan.FromSeconds(60));
+        }
+
+        object RouteValuesForPage(int pageNumber) => new
+        {
             pageNumber,
-            pageSize,
-            totalCount);
+            request.PageSize,
+            request.SortColumn,
+            request.SortOrder,
+            request.FilterQuery
+        };
 
         var links = new List<Link>
         {
             new Link
             {
-                Href = Url.Link("GetBoardGames", new { pageNumber, pageSize, sortColumn })!,
+                Href = Url.Link("GetBoardGames", RouteValuesForPage(request.PageNumber))!,
                 Method = HttpMethod.Get.Method,
                 Rel = "self"
             }
@@ -182,7 +214,7 @@ public class BoardGamesController(
         if (pagedResponse.HasNextPage)
             links.Add(new Link
             {
-                Href = Url.Link("GetBoardGames", new { pageNumber = pageNumber + 1, pageSize, sortColumn })!,
+                Href = Url.Link("GetBoardGames", RouteValuesForPage(request.PageNumber + 1))!,
                 Method = HttpMethod.Get.Method,
                 Rel = "next"
             });
@@ -190,7 +222,7 @@ public class BoardGamesController(
         if (pagedResponse.HasPreviousPage)
             links.Add(new Link
             {
-                Href = Url.Link("GetBoardGames", new { pageNumber = pageNumber - 1, pageSize, sortColumn })!,
+                Href = Url.Link("GetBoardGames", RouteValuesForPage(request.PageNumber - 1))!,
                 Method = HttpMethod.Get.Method,
                 Rel = "prev"
             });
@@ -204,6 +236,13 @@ public class BoardGamesController(
         return Ok(response);
     }
 
+    /// <summary>
+    /// Creates a new board game.
+    /// </summary>
+    /// <param name="request">The board game's name and year.</param>
+    /// <param name="ct">A cancellation token.</param>
+    [Authorize(Roles = RoleNames.Moderator)]
+    [ResponseCache(CacheProfileName = "NoCache")]
     [HttpPost(Name = "CreateBoardGame")]
     public async Task<IActionResult> CreateBoardGame(
         [FromBody] CreateBoardGameRequest request,
@@ -223,6 +262,11 @@ public class BoardGamesController(
         return CreatedAtAction(nameof(GetBoardGameById), new { id = boardGame.Id }, response);
     }
 
+    /// <summary>
+    /// Gets a single board game by id.
+    /// </summary>
+    /// <param name="id">The board game's id.</param>
+    /// <param name="ct">A cancellation token.</param>
     [HttpGet("{id:int}", Name = "GetBoardGameById")]
     public async Task<IActionResult> GetBoardGameById(
         [FromRoute] int id,
@@ -242,6 +286,14 @@ public class BoardGamesController(
         return Ok(response);
     }
 
+    /// <summary>
+    /// Updates an existing board game's name and/or year.
+    /// </summary>
+    /// <param name="id">The board game's id.</param>
+    /// <param name="request">The fields to update.</param>
+    /// <param name="ct">A cancellation token.</param>
+    [Authorize(Roles = RoleNames.Moderator)]
+    [ResponseCache(CacheProfileName = "NoCache")]
     [HttpPut("{id:int}", Name = "UpdateBoardGame")]
     public async Task<IActionResult> UpdateBoardGame(
         [FromRoute] int id,
@@ -265,6 +317,13 @@ public class BoardGamesController(
         return Ok(response);
     }
 
+    /// <summary>
+    /// Deletes a board game by id.
+    /// </summary>
+    /// <param name="id">The board game's id.</param>
+    /// <param name="ct">A cancellation token.</param>
+    [Authorize(Roles = RoleNames.Administrator)]
+    [ResponseCache(CacheProfileName = "NoCache")]
     [HttpDelete("{id:int}", Name = "DeleteBoardGameById")]
     public async Task<IActionResult> DeleteBoardGameById(
         [FromRoute] int id,
@@ -279,14 +338,6 @@ public class BoardGamesController(
         await _context.SaveChangesAsync(ct);
 
         return NoContent();
-    }
-
-    [HttpGet("test")]
-    public async Task<IActionResult> TestCache()
-    {
-        _cache.SetString("key1", "string1");
-
-        return Ok();
     }
 
     private static List<Link> GetBoardGameLinks(IUrlHelper url, int id)

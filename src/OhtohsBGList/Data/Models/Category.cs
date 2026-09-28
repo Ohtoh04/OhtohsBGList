@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace OhtohsBGList.Data.Models;
 
 [Table("Categories")]
-public class Category
+public class Category : IAuditable
 {
     [Key]
     [Required]

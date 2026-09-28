@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace OhtohsBGList.Data.Models;
 
 [Table("BoardGames")]
-public class BoardGame
+public class BoardGame : IAuditable
 {
     [Key]
     [Required]
